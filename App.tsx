@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
-import { SafeAreaView, ScrollView, View, Text, TextInput, Button, Alert, Platform } from 'react-native';
-import { Picker } from '@react-native-picker/picker'; // CORRECTED IMPORT
+import { SafeAreaView, ScrollView, View, Text, TextInput, Button, Alert, Platform, Picker } from 'react-native';
 import { VictoryChart, VictoryLine, VictoryTheme, VictoryAxis, VictoryArea } from 'victory-native';
 import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system';
