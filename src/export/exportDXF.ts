@@ -1,7 +1,5 @@
-// src/export/exportDXF.ts
 import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system';
-import { Alert } from 'react-native'; // Added missing import
 
 interface BoxParams {
   type: string;
