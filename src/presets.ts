@@ -1,4 +1,3 @@
-// src/presets.ts
 export const presets = [
   {
     name: "Example 15\" Subwoofer",
