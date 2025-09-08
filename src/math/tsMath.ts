@@ -1,4 +1,3 @@
-// src/math/tsMath.ts
 interface DriverParams {
   Vas: string;
   Qts: string;
