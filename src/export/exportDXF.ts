@@ -1,87 +1,110 @@
-import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
 
-interface BoxParams {
-  type: string;
-  volume: string;
-  tuning: string;
-  portDiameter: string;
-  portLength: string;
-  numPorts: string;
-  slotWidth: string;
-  slotHeight: string;
-  ratio: string;
-}
-
-interface DriverParams {
-  Vas: string;
-  Qts: string;
-  Fs: string;
-  Qes: string;
-  Sd: string;
-  Xmax: string;
-  Re: string;
-  Le: string;
-  Bl: string;
-  sensitivity: string;
-}
-
-export const exportDXF = (boxParams: BoxParams, driver: DriverParams, results: any) => {
-  const { type, volume, portDiameter, portLength, slotWidth, slotHeight } = boxParams;
-  const { Vb, Lv } = results;
-  
-  // Calculate internal dimensions (simplified)
-  const internalVolume = Vb * 1000; // Convert to liters
-  const internalDim = Math.cbrt(internalVolume) * 10; // Approx side length in cm
-  
-  let dxf = `0\nSECTION\n2\nHEADER\n0\nENDSEC\n0\nSECTION\n2\nTABLES\n0\nENDSEC\n0\nSECTION\n2\nBLOCKS\n0\nENDSEC\n0\nSECTION\n2\nENTITIES\n`;
-  
-  // Box outline
-  dxf += `0\nLINE\n8\n0\n10\n0\n20\n0\n30\n0.0\n11\n${internalDim}\n21\n0\n31\n0.0\n`;
-  dxf += `0\nLINE\n8\n0\n10\n${internalDim}\n20\n0\n30\n0.0\n11\n${internalDim}\n21\n${internalDim}\n31\n0.0\n`;
-  dxf += `0\nLINE\n8\n0\n10\n${internalDim}\n20\n${internalDim}\n30\n0.0\n11\n0\n21\n${internalDim}\n31\n0.0\n`;
-  dxf += `0\nLINE\n8\n0\n10\n0\n20\n${internalDim}\n30\n0.0\n11\n0\n21\n0\n31\n0.0\n`;
-  
-  // Add driver cutout
-  const driverSize = parseFloat(driver.Sd) > 800 ? 38 : // ~15"
-                    parseFloat(driver.Sd) > 500 ? 30 : // ~12"
-                    25; // ~10"
-  const driverX = internalDim / 2;
-  const driverY = internalDim / 2;
-  dxf += `0\nCIRCLE\n8\n0\n10\n${driverX}\n20\n${driverY}\n30\n0.0\n40\n${driverSize/2}\n`;
-  
-  // Add port if applicable
-  if ((type === "ported" || type.includes("bandpass")) && portDiameter) {
-    const portRadius = parseFloat(portDiameter) / 2;
-    const portX = internalDim - portRadius - 5;
-    const portY = internalDim / 2;
-    dxf += `0\nCIRCLE\n8\n0\n10\n${portX}\n20\n${portY}\n30\n0.0\n40\n${portRadius}\n`;
-    
-    // Add port length dimension
-    dxf += `0\nLINE\n8\n0\n10\n${portX + portRadius + 5}\n20\n${portY}\n30\n0.0\n11\n${portX + portRadius + 15}\n21\n${portY}\n31\n0.0\n`;
-  }
-  
-  dxf += `0\nENDSEC\n0\nEOF`;
-
-  return dxf;
+type ExportInput = {
+  mode: string;
+  driver: { name: string };
+  box: { Vb: number; wallThickness?: number };
+  result: { Vb: number; Fb?: number };
 };
 
-export const saveDXF = async (dxfContent: string, filename: string) => {
-  const path = `${FileSystem.documentDirectory}${filename}`;
-  try {
-    await FileSystem.writeAsStringAsync(path, dxfContent);
-    
-    if (await Sharing.isAvailableAsync()) {
-      await Sharing.shareAsync(path, {
-        mimeType: 'application/dxf',
-        dialogTitle: 'Share DXF File',
-        UTI: 'com.autodesk.dxf'
-      });
-    } else {
-      Alert.alert('Export Complete', 'DXF file saved locally');
-    }
-  } catch (error) {
-    console.error('Error saving DXF:', error);
-    Alert.alert('Export Error', 'Failed to save DXF file');
+const dxfHeader = () => `0
+SECTION
+2
+HEADER
+9
+$ACADVER
+1
+AC1009
+0
+ENDSEC
+0
+SECTION
+2
+ENTITIES
+`;
+
+const dxfFooter = () => `0
+ENDSEC
+0
+EOF
+`;
+
+function dxfRect(x: number, y: number, w: number, h: number, layer = 'PANELS') {
+  const pts = [
+    [x, y],
+    [x + w, y],
+    [x + w, y + h],
+    [x, y + h],
+    [x, y]
+  ];
+  let s = '';
+  for (let i = 0; i < pts.length - 1; i++) {
+    const [x1, y1] = pts[i];
+    const [x2, y2] = pts[i + 1];
+    s += `0
+LINE
+8
+${layer}
+10
+${x1}
+20
+${y1}
+11
+${x2}
+21
+${y2}
+`;
   }
-};
+  return s;
+}
+
+export function exportDXF(input: ExportInput): string {
+  const { box, result } = input;
+  const t = box.wallThickness ?? 0.75;
+  const width = 28;
+  const height = 16;
+  const depth = 14;
+
+  let body = '';
+  const gap = 2;
+  const panels = [
+    { w: width, h: height, name: 'Front' },
+    { w: width, h: height, name: 'Back' },
+    { w: width, h: depth, name: 'Top' },
+    { w: width, h: depth, name: 'Bottom' },
+    { w: depth, h: height, name: 'Left' },
+    { w: depth, h: height, name: 'Right' }
+  ];
+  let cursorX = 0;
+  panels.forEach((p) => {
+    body += dxfRect(cursorX, 0, p.w, p.h);
+    cursorX += p.w + gap;
+  });
+
+  body += `0
+TEXT
+8
+NOTES
+10
+0
+20
+${height + 10}
+40
+0.25
+1
+Vb=${result.Vb.toFixed(1)}L Fb=${result.Fb ?? '-'} t=${t}in
+`;
+
+  return dxfHeader() + body + dxfFooter();
+}
+
+export async function saveDXF(dxf: string, filename: string): Promise<string> {
+  const dir = FileSystem.cacheDirectory ?? FileSystem.documentDirectory ?? '';
+  const fileUri = dir + filename;
+  await FileSystem.writeAsStringAsync(fileUri, dxf, { encoding: FileSystem.EncodingType.UTF8 });
+  if (await Sharing.isAvailableAsync()) {
+    await Sharing.shareAsync(fileUri, { mimeType: 'application/dxf', dialogTitle: 'Share DXF' });
+  }
+  return fileUri;
+}
