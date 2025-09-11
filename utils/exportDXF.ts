@@ -4,7 +4,7 @@ import * as Sharing from 'expo-sharing';
 type ExportInput = {
   mode: string;
   driver: { name: string };
-  box: { Vb: number; wallThickness?: number };
+  box: { Vb: number; wallThickness?: number; portWidth?: number; portHeight?: number };
   result: { Vb: number; Fb?: number };
 };
 
@@ -30,8 +30,8 @@ ENDSEC
 EOF
 `;
 
-function dxfRect(x: number, y: number, w: number, h: number, layer = 'PANELS') {
-  const pts = [
+function dxfRect(x: number, y: number, w: number, h: number, layer = 'PANELS'): string {
+  const pts: [number, number][] = [
     [x, y],
     [x + w, y],
     [x + w, y + h],
@@ -69,12 +69,12 @@ export function exportDXF(input: ExportInput): string {
   let body = '';
   const gap = 2;
   const panels = [
-    { w: width, h: height },
-    { w: width, h: height },
-    { w: width, h: depth },
-    { w: width, h: depth },
-    { w: depth, h: height },
-    { w: depth, h: height }
+    { w: width, h: height, name: 'Front' },
+    { w: width, h: height, name: 'Back' },
+    { w: width, h: depth, name: 'Top' },
+    { w: width, h: depth, name: 'Bottom' },
+    { w: depth, h: height, name: 'Left' },
+    { w: depth, h: height, name: 'Right' }
   ];
   let cursorX = 0;
   panels.forEach((p) => {
@@ -93,7 +93,7 @@ ${height + 10}
 40
 0.25
 1
-Vb=${result.Vb.toFixed(1)}L Fb=${result.Fb ?? '-'} t=${t}in
+Vb=${result.Vb.toFixed(1)}L Fb=${result.Fb !== undefined ? result.Fb : '-'} t=${t}in
 `;
 
   return dxfHeader() + body + dxfFooter();
@@ -102,4 +102,9 @@ Vb=${result.Vb.toFixed(1)}L Fb=${result.Fb ?? '-'} t=${t}in
 export async function saveDXF(dxf: string, filename: string): Promise<string> {
   const dir = FileSystem.cacheDirectory ?? FileSystem.documentDirectory ?? '';
   const fileUri = dir + filename;
-  await FileSystem.writeAsStringAsync
+  await FileSystem.writeAsStringAsync(fileUri, dxf, { encoding: FileSystem.EncodingType.UTF8 });
+  if (await Sharing.isAvailableAsync()) {
+    await Sharing.shareAsync(fileUri, { mimeType: 'application/dxf', dialogTitle: 'Share DXF' });
+  }
+  return fileUri;
+}
