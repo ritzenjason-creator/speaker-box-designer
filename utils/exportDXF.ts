@@ -1,110 +1,45 @@
-import * as FileSystem from 'expo-file-system';
-import * as Sharing from 'expo-sharing';
+// utils/exportDXF.ts
+import { BoxParams, EnclosureResult } from './math';
+import DXFWriter from 'dxf-writer';
 
-type ExportInput = {
-  mode: string;
-  driver: { name: string };
-  box: { Vb: number; wallThickness?: number; portWidth?: number; portHeight?: number };
-  result: { Vb: number; Fb?: number };
-};
+/**
+ * Very simple DXF export stub.
+ * Generates a rectangle for each panel based on box volume.
+ * Later we can expand this into a full cut list with joinery/bracing.
+ */
+export function exportDXF(box: BoxParams, result: EnclosureResult): string {
+  const dxf = new DXFWriter();
 
-const dxfHeader = () => `0
-SECTION
-2
-HEADER
-9
-$ACADVER
-1
-AC1009
-0
-ENDSEC
-0
-SECTION
-2
-ENTITIES
-`;
+  // Example: assume a cube with internal volume Vb liters
+  // Convert liters to cubic inches (1 L = 61.024 in³)
+  const cubicInches = box.Vb * 61.024;
+  const sideInches = Math.cbrt(cubicInches); // cube root for equal sides
 
-const dxfFooter = () => `0
-ENDSEC
-0
-EOF
-`;
-
-function dxfRect(x: number, y: number, w: number, h: number, layer = 'PANELS'): string {
-  const pts: [number, number][] = [
-    [x, y],
-    [x + w, y],
-    [x + w, y + h],
-    [x, y + h],
-    [x, y]
-  ];
-  let s = '';
-  for (let i = 0; i < pts.length - 1; i++) {
-    const [x1, y1] = pts[i];
-    const [x2, y2] = pts[i + 1];
-    s += `0
-LINE
-8
-${layer}
-10
-${x1}
-20
-${y1}
-11
-${x2}
-21
-${y2}
-`;
-  }
-  return s;
-}
-
-export function exportDXF(input: ExportInput): string {
-  const { box, result } = input;
+  // Outer dimensions (add wall thickness if provided)
   const t = box.wallThickness ?? 0.75;
-  const width = 28;
-  const height = 16;
-  const depth = 14;
+  const outer = sideInches + 2 * t;
 
-  let body = '';
-  const gap = 2;
+  // Draw six panels as rectangles
   const panels = [
-    { w: width, h: height, name: 'Front' },
-    { w: width, h: height, name: 'Back' },
-    { w: width, h: depth, name: 'Top' },
-    { w: width, h: depth, name: 'Bottom' },
-    { w: depth, h: height, name: 'Left' },
-    { w: depth, h: height, name: 'Right' }
+    { name: 'Front', w: outer, h: outer },
+    { name: 'Back', w: outer, h: outer },
+    { name: 'Top', w: outer, h: outer },
+    { name: 'Bottom', w: outer, h: outer },
+    { name: 'Left', w: outer, h: outer },
+    { name: 'Right', w: outer, h: outer },
   ];
-  let cursorX = 0;
-  panels.forEach((p) => {
-    body += dxfRect(cursorX, 0, p.w, p.h);
-    cursorX += p.w + gap;
+
+  panels.forEach((p, i) => {
+    const offsetX = (i % 3) * (outer + 10); // space out panels
+    const offsetY = Math.floor(i / 3) * (outer + 10);
+
+    dxf.addLayer(p.name, DXFWriter.ACI.BLUE, 'CONTINUOUS');
+    dxf.setActiveLayer(p.name);
+
+    dxf.drawRect(offsetX, offsetY, p.w, p.h);
+    dxf.addText(p.name, 10, offsetX + p.w / 2, offsetY - 15, 0);
   });
 
-  body += `0
-TEXT
-8
-NOTES
-10
-0
-20
-${height + 10}
-40
-0.25
-1
-Vb=${result.Vb.toFixed(1)}L Fb=${result.Fb !== undefined ? result.Fb : '-'} t=${t}in
-`;
-
-  return dxfHeader() + body + dxfFooter();
+  return dxf.stringify();
 }
 
-export async function saveDXF(dxf: string, filename: string): Promise<string> {
-  const dir = FileSystem.cacheDirectory ?? FileSystem.documentDirectory ?? '';
-  const fileUri = dir + filename;
-  await FileSystem.writeAsStringAsync(fileUri, dxf, { encoding: FileSystem.EncodingType.UTF8 });
-  if (await Sharing.isAvailableAsync()) {
-    await Sharing.shareAsync(fileUri, { mimeType: 'application/dxf', dialogTitle: 'Share DXF' });
-  }
-  return fileUri;
-}
