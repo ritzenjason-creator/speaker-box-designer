@@ -2,8 +2,10 @@
 import React, { useState, useMemo } from 'react';
 import { View, Text, Button, TextInput, StyleSheet, ScrollView, Alert } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
+import { VictoryChart, VictoryLine, VictoryTheme, VictoryAxis } from 'victory-native';
 import { useStore } from './store';
 import { presets } from '../utils/presets';
+import { calculateEnclosure } from '../utils/math';
 
 export default function DesignScreen() {
   const setDriver = useStore(s => s.setDriver);
@@ -32,6 +34,22 @@ export default function DesignScreen() {
     }
     return null;
   }, [width, height, depth]);
+
+  // Live SPL preview calculation
+  const previewResult = useMemo(() => {
+    if (!driver) return null;
+    const VbLiters = parseFloat(vb);
+    const FbHz = parseFloat(fb);
+    if (isNaN(VbLiters) || isNaN(FbHz)) return null;
+
+    return calculateEnclosure('Ported', driver, {
+      Vb: VbLiters,
+      Fb: FbHz,
+      width: width ? parseFloat(width) : undefined,
+      height: height ? parseFloat(height) : undefined,
+      depth: depth ? parseFloat(depth) : undefined,
+    });
+  }, [driver, vb, fb, width, height, depth]);
 
   const validateInputs = () => {
     const VbLiters = parseFloat(vb);
@@ -109,6 +127,23 @@ export default function DesignScreen() {
         </Text>
       )}
 
+      {/* Mini SPL Graph */}
+      {previewResult && (
+        <View style={styles.graphBox}>
+          <Text style={styles.graphTitle}>Live SPL Preview</Text>
+          <VictoryChart theme={VictoryTheme.material} height={200} width={350}>
+            <VictoryAxis label="Hz" />
+            <VictoryAxis dependentAxis label="dB" />
+            <VictoryLine
+              data={previewResult.splCurve}
+              x="x"
+              y="y"
+              style={{ data: { stroke: "#4CAF50" } }}
+            />
+          </VictoryChart>
+        </View>
+      )}
+
       <Button
         title="Run Calculation"
         onPress={() => {
@@ -140,5 +175,7 @@ const styles = StyleSheet.create({
   picker: { backgroundColor: '#222', color: '#fff' },
   input: { backgroundColor: '#222', color: '#fff', padding: 10, borderRadius: 6 },
   preview: { marginTop: 10, color: '#aaa', fontStyle: 'italic' },
+  graphBox: { marginTop: 20, backgroundColor: '#111', borderRadius: 6, padding: 10 },
+  graphTitle: { color: '#ccc', marginBottom: 5, fontWeight: '600' },
   resultBox: { marginTop: 20, padding: 10, backgroundColor: '#111', borderRadius: 6 },
 });
