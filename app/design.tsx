@@ -1,6 +1,6 @@
 // app/design.tsx
 import React, { useState } from 'react';
-import { View, Text, Button, TextInput, StyleSheet } from 'react-native';
+import { View, Text, Button, TextInput, StyleSheet, ScrollView } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 import { useStore } from './store';
 import { presets } from '../utils/presets';
@@ -15,9 +15,12 @@ export default function DesignScreen() {
   // Local state for box inputs
   const [vb, setVb] = useState('40');   // liters
   const [fb, setFb] = useState('32');   // Hz
+  const [width, setWidth] = useState('');   // inches
+  const [height, setHeight] = useState(''); // inches
+  const [depth, setDepth] = useState('');   // inches
 
   return (
-    <View style={styles.container}>
+    <ScrollView style={styles.container}>
       <Text style={styles.title}>Design Your Enclosure</Text>
 
       {/* Driver Picker */}
@@ -52,24 +55,55 @@ export default function DesignScreen() {
         onChangeText={setFb}
       />
 
+      {/* Optional Dimensions */}
+      <Text style={styles.label}>Width (inches, optional)</Text>
+      <TextInput
+        style={styles.input}
+        keyboardType="numeric"
+        value={width}
+        onChangeText={setWidth}
+      />
+
+      <Text style={styles.label}>Height (inches, optional)</Text>
+      <TextInput
+        style={styles.input}
+        keyboardType="numeric"
+        value={height}
+        onChangeText={setHeight}
+      />
+
+      <Text style={styles.label}>Depth (inches, optional)</Text>
+      <TextInput
+        style={styles.input}
+        keyboardType="numeric"
+        value={depth}
+        onChangeText={setDepth}
+      />
+
       <Button
         title="Run Calculation"
         onPress={() => {
-          setBox({ Vb: parseFloat(vb), Fb: parseFloat(fb) });
+          setBox({
+            Vb: parseFloat(vb),
+            Fb: parseFloat(fb),
+            width: width ? parseFloat(width) : undefined,
+            height: height ? parseFloat(height) : undefined,
+            depth: depth ? parseFloat(depth) : undefined,
+          });
           runCalculation();
         }}
       />
 
       {result && (
         <View style={styles.resultBox}>
-          <Text>Calculated Fb: {result.Fb} Hz</Text>
+          <Text>Calculated Fb: {result.Fb ?? 'N/A'} Hz</Text>
           <Text>Warnings:</Text>
           {result.warnings.map((w, i) => (
             <Text key={i} style={{ color: 'orange' }}>⚠️ {w}</Text>
           ))}
         </View>
       )}
-    </View>
+    </ScrollView>
   );
 }
 
