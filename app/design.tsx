@@ -1,6 +1,6 @@
 // app/design.tsx
 import React, { useState, useMemo } from 'react';
-import { View, Text, Button, TextInput, StyleSheet, ScrollView, Alert } from 'react-native';
+import { View, Text, Button, TextInput, StyleSheet, ScrollView, Alert, Switch } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 import { VictoryChart, VictoryLine, VictoryTheme, VictoryAxis } from 'victory-native';
 import { useStore } from './store';
@@ -20,6 +20,7 @@ export default function DesignScreen() {
   const [width, setWidth] = useState('');   // inches
   const [height, setHeight] = useState(''); // inches
   const [depth, setDepth] = useState('');   // inches
+  const [compareSealed, setCompareSealed] = useState(true);
 
   // Live preview: calculate liters from dimensions
   const litersFromDims = useMemo(() => {
@@ -36,7 +37,7 @@ export default function DesignScreen() {
   }, [width, height, depth]);
 
   // Live SPL preview calculation
-  const previewResult = useMemo(() => {
+  const previewPorted = useMemo(() => {
     if (!driver) return null;
     const VbLiters = parseFloat(vb);
     const FbHz = parseFloat(fb);
@@ -50,6 +51,19 @@ export default function DesignScreen() {
       depth: depth ? parseFloat(depth) : undefined,
     });
   }, [driver, vb, fb, width, height, depth]);
+
+  const previewSealed = useMemo(() => {
+    if (!driver) return null;
+    const VbLiters = parseFloat(vb);
+    if (isNaN(VbLiters)) return null;
+
+    return calculateEnclosure('Sealed', driver, {
+      Vb: VbLiters,
+      width: width ? parseFloat(width) : undefined,
+      height: height ? parseFloat(height) : undefined,
+      depth: depth ? parseFloat(depth) : undefined,
+    });
+  }, [driver, vb, width, height, depth]);
 
   const validateInputs = () => {
     const VbLiters = parseFloat(vb);
@@ -127,20 +141,39 @@ export default function DesignScreen() {
         </Text>
       )}
 
+      {/* Toggle for Sealed vs Ported comparison */}
+      <View style={styles.toggleRow}>
+        <Text style={{ color: '#ccc', marginRight: 10 }}>Compare Sealed vs Ported</Text>
+        <Switch
+          value={compareSealed}
+          onValueChange={setCompareSealed}
+          thumbColor={compareSealed ? '#4CAF50' : '#888'}
+        />
+      </View>
+
       {/* Mini SPL Graph */}
-      {previewResult && (
+      {previewPorted && (
         <View style={styles.graphBox}>
           <Text style={styles.graphTitle}>Live SPL Preview</Text>
           <VictoryChart theme={VictoryTheme.material} height={200} width={350}>
             <VictoryAxis label="Hz" />
             <VictoryAxis dependentAxis label="dB" />
             <VictoryLine
-              data={previewResult.splCurve}
+              data={previewPorted.splCurve}
               x="x"
               y="y"
               style={{ data: { stroke: "#4CAF50" } }}
             />
+            {compareSealed && previewSealed && (
+              <VictoryLine
+                data={previewSealed.splCurve}
+                x="x"
+                y="y"
+                style={{ data: { stroke: "#2196F3", strokeDasharray: "5,5" } }}
+              />
+            )}
           </VictoryChart>
+          {compareSealed && <Text style={{ color: '#aaa', fontSize: 12 }}>Green = Ported, Blue Dashed = Sealed</Text>}
         </View>
       )}
 
@@ -172,10 +205,4 @@ const styles = StyleSheet.create({
   container: { flex: 1, padding: 20, backgroundColor: '#0e0f11' },
   title: { fontSize: 22, fontWeight: 'bold', marginBottom: 20, color: '#fff' },
   label: { marginTop: 15, marginBottom: 5, color: '#ccc' },
-  picker: { backgroundColor: '#222', color: '#fff' },
-  input: { backgroundColor: '#222', color: '#fff', padding: 10, borderRadius: 6 },
-  preview: { marginTop: 10, color: '#aaa', fontStyle: 'italic' },
-  graphBox: { marginTop: 20, backgroundColor: '#111', borderRadius: 6, padding: 10 },
-  graphTitle: { color: '#ccc', marginBottom: 5, fontWeight: '600' },
-  resultBox: { marginTop: 20, padding: 10, backgroundColor: '#111', borderRadius: 6 },
-});
+  picker: { backgroundColor: '#222', color: '#fff
